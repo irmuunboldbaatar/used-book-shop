@@ -2,31 +2,44 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Used Books Marketplace</title>
+  <title>School Used Books Marketplace</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f5f5f5; }
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f5f5f5; }
     header { background: #1f2937; color: white; padding: 1rem; text-align: center; }
-    main { padding: 1rem; max-width: 900px; margin: auto; }
+    main { padding: 1rem; max-width: 1000px; margin: auto; }
     h2 { margin-top: 2rem; }
     form { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
     input, button { width: 100%; padding: 0.6rem; margin: 0.4rem 0; }
     button { background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
-    button:hover { background: #1d4ed8; }
-    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+    button.secondary { background: #374151; }
+    button.danger { background: #dc2626; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; }
     .card { background: white; border-radius: 8px; padding: 0.5rem; box-shadow: 0 2px 6px rgba(0,0,0,0.1); position: relative; }
     .card img { width: 100%; height: 200px; object-fit: cover; border-radius: 6px; }
     .price { font-weight: bold; color: #059669; }
     .sold { position: absolute; top: 10px; right: 10px; background: #dc2626; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
+    .sold-card { opacity: 0.5; }
+    .topbar { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .stats { background:white; padding:0.5rem; border-radius:8px; margin-top:1rem; }
+    footer { margin-top: 3rem; padding: 1rem; font-size: 0.9rem; color: #374151; }
   </style>
 </head>
 <body>
   <header>
-    <h1>📚 Used Books Marketplace</h1>
-    <p>Buy & sell textbooks inside our school</p>
+    <h1>📚 School Used Books Marketplace</h1>
+    <p>Only for our school · Meet in person · No online payments</p>
   </header>
 
   <main>
+    <div class="topbar">
+      <button id="loginBtn" class="secondary">Admin Login</button>
+      <button id="logoutBtn" class="secondary" style="display:none">Logout</button>
+      <button id="toggleSold" class="secondary">Hide Sold</button>
+    </div>
+
+    <div class="stats" id="stats"></div>
+
     <h2>🔥 Recent Books</h2>
     <div id="bookGrid" class="grid"></div>
 
@@ -43,11 +56,17 @@
       <input required placeholder="Image URL (Imgur / Drive / Discord)" id="imageUrl" />
       <button type="submit">Upload Book</button>
     </form>
+
+    <footer>
+      <p><strong>Rules:</strong> No delivery, no online payment. Meet safely inside school.</p>
+      <p>Сургуулийн доторх сурагчдад зориулсан ном солилцох сайт.</p>
+    </footer>
   </main>
 
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+    import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBo975fUWgxYJwGb2Ie4zIcxPb2-etH8ic",
@@ -59,17 +78,49 @@
       measurementId: "G-EEZ7CYSM1E"
     };
 
+    const ADMIN_EMAIL = "irmuun.moon11@gmail.com"; // change this
+
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
+    const auth = getAuth(app);
+    const provider = new GoogleAuthProvider();
 
     const bookGrid = document.getElementById('bookGrid');
     const searchInput = document.getElementById('searchInput');
+    const statsDiv = document.getElementById('stats');
+    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
+    const toggleSoldBtn = document.getElementById('toggleSold');
 
-    const q = query(collection(db, 'books'), orderBy('createdAt', 'desc'));
+    let isAdmin = false;
+    let hideSold = false;
     let allBooks = [];
 
-    onSnapshot(q, snapshot => {
-      allBooks = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+    loginBtn.onclick = () => signInWithPopup(auth, provider);
+    logoutBtn.onclick = () => signOut(auth);
+
+    onAuthStateChanged(auth, user => {
+      if (user && user.email === ADMIN_EMAIL) {
+        isAdmin = true;
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'inline-block';
+      } else {
+        isAdmin = false;
+        loginBtn.style.display = 'inline-block';
+        logoutBtn.style.display = 'none';
+      }
+      render();
+    });
+
+    toggleSoldBtn.onclick = () => {
+      hideSold = !hideSold;
+      toggleSoldBtn.textContent = hideSold ? 'Show Sold' : 'Hide Sold';
+      render();
+    };
+
+    const q = query(collection(db, 'books'), orderBy('createdAt', 'desc'));
+    onSnapshot(q, snap => {
+      allBooks = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       render();
     });
 
@@ -77,26 +128,39 @@
       const search = searchInput.value.toLowerCase();
       bookGrid.innerHTML = '';
 
-      allBooks
-        .filter(b => b.title.toLowerCase().includes(search) || b.subject.toLowerCase().includes(search))
-        .forEach(book => {
-          const div = document.createElement('div');
-          div.className = 'card';
-          div.innerHTML = `
-            ${book.sold ? '<div class="sold">SOLD</div>' : ''}
-            <img src="${book.imageUrl}" />
-            <h4>${book.title}</h4>
-            <p>${book.subject} · Grade ${book.grade}</p>
-            <p class="price">${book.price}₮</p>
-            <p>📞 ${book.contact}</p>
-            ${!book.sold ? '<button data-id="'+book.id+'">Mark as Sold</button>' : ''}
-          `;
-          bookGrid.appendChild(div);
-        });
+      const visible = allBooks.filter(b =>
+        (b.title.toLowerCase().includes(search) || b.subject.toLowerCase().includes(search)) &&
+        (!hideSold || !b.sold)
+      );
 
-      document.querySelectorAll('button[data-id]').forEach(btn => {
-        btn.onclick = async () => {
-          await updateDoc(doc(db, 'books', btn.dataset.id), { sold: true });
+      statsDiv.textContent = `Total books: ${allBooks.length} · Available: ${allBooks.filter(b=>!b.sold).length}`;
+
+      visible.forEach(book => {
+        const div = document.createElement('div');
+        div.className = 'card' + (book.sold ? ' sold-card' : '');
+        div.innerHTML = `
+          ${book.sold ? '<div class="sold">SOLD</div>' : ''}
+          <img src="${book.imageUrl}" />
+          <h4>${book.title}</h4>
+          <p>${book.subject} · Grade ${book.grade}</p>
+          <p class="price">${book.price}₮</p>
+          <p>📞 ${book.contact}</p>
+          ${isAdmin && !book.sold ? '<button class="danger" data-sold="'+book.id+'">Mark Sold</button>' : ''}
+          ${isAdmin ? '<button class="secondary" data-del="'+book.id+'">Delete</button>' : ''}
+        `;
+        bookGrid.appendChild(div);
+      });
+
+      document.querySelectorAll('[data-sold]').forEach(b => {
+        b.onclick = () => {
+          if (confirm('Mark this book as sold?'))
+            updateDoc(doc(db,'books',b.dataset.sold),{sold:true});
+        };
+      });
+      document.querySelectorAll('[data-del]').forEach(b => {
+        b.onclick = () => {
+          if (confirm('Delete this listing?'))
+            deleteDoc(doc(db,'books',b.dataset.del));
         };
       });
     }
