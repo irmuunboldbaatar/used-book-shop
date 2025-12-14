@@ -10,13 +10,14 @@
     main { padding: 1rem; max-width: 900px; margin: auto; }
     h2 { margin-top: 2rem; }
     form { background: white; padding: 1rem; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
-    input, select, button { width: 100%; padding: 0.6rem; margin: 0.4rem 0; }
+    input, button { width: 100%; padding: 0.6rem; margin: 0.4rem 0; }
     button { background: #2563eb; color: white; border: none; border-radius: 6px; cursor: pointer; }
     button:hover { background: #1d4ed8; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
-    .card { background: white; border-radius: 8px; padding: 0.5rem; box-shadow: 0 2px 6px rgba(0,0,0,0.1); }
+    .card { background: white; border-radius: 8px; padding: 0.5rem; box-shadow: 0 2px 6px rgba(0,0,0,0.1); position: relative; }
     .card img { width: 100%; height: 200px; object-fit: cover; border-radius: 6px; }
     .price { font-weight: bold; color: #059669; }
+    .sold { position: absolute; top: 10px; right: 10px; background: #dc2626; color: white; padding: 0.2rem 0.5rem; border-radius: 4px; font-size: 0.8rem; }
   </style>
 </head>
 <body>
@@ -39,16 +40,14 @@
       <input required type="number" placeholder="Grade" id="grade" />
       <input required type="number" placeholder="Price" id="price" />
       <input required placeholder="Contact info" id="contact" />
-      <input required type="file" id="image" accept="image/*" />
+      <input required placeholder="Image URL (Imgur / Drive / Discord)" id="imageUrl" />
       <button type="submit">Upload Book</button>
     </form>
   </main>
 
-  <!-- Firebase -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-    import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, doc, updateDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
     const firebaseConfig = {
         apiKey: "AIzaSy....",
@@ -59,59 +58,62 @@
         appId: "1:123456789:web:abcdef"
     };
 
-
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
-    const storage = getStorage(app);
 
     const bookGrid = document.getElementById('bookGrid');
     const searchInput = document.getElementById('searchInput');
 
     const q = query(collection(db, 'books'), orderBy('createdAt', 'desc'));
+    let allBooks = [];
+
     onSnapshot(q, snapshot => {
-      render(snapshot.docs.map(d => d.data()));
+      allBooks = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+      render();
     });
 
-    function render(books) {
+    function render() {
       const search = searchInput.value.toLowerCase();
       bookGrid.innerHTML = '';
-      books.filter(b =>
-        b.title.toLowerCase().includes(search) ||
-        b.subject.toLowerCase().includes(search)
-      ).forEach(book => {
-        const div = document.createElement('div');
-        div.className = 'card';
-        div.innerHTML = `
-          <img src="${book.imageUrl}" />
-          <h4>${book.title}</h4>
-          <p>${book.subject} · Grade ${book.grade}</p>
-          <p class="price">${book.price}₮</p>
-          <p>📞 ${book.contact}</p>
-        `;
-        bookGrid.appendChild(div);
+
+      allBooks
+        .filter(b => b.title.toLowerCase().includes(search) || b.subject.toLowerCase().includes(search))
+        .forEach(book => {
+          const div = document.createElement('div');
+          div.className = 'card';
+          div.innerHTML = `
+            ${book.sold ? '<div class="sold">SOLD</div>' : ''}
+            <img src="${book.imageUrl}" />
+            <h4>${book.title}</h4>
+            <p>${book.subject} · Grade ${book.grade}</p>
+            <p class="price">${book.price}₮</p>
+            <p>📞 ${book.contact}</p>
+            ${!book.sold ? '<button data-id="'+book.id+'">Mark as Sold</button>' : ''}
+          `;
+          bookGrid.appendChild(div);
+        });
+
+      document.querySelectorAll('button[data-id]').forEach(btn => {
+        btn.onclick = async () => {
+          await updateDoc(doc(db, 'books', btn.dataset.id), { sold: true });
+        };
       });
     }
 
-    searchInput.addEventListener('input', () => render([]));
+    searchInput.addEventListener('input', render);
 
     document.getElementById('bookForm').addEventListener('submit', async e => {
       e.preventDefault();
-
-      const file = image.files[0];
-      const imgRef = ref(storage, 'books/' + Date.now());
-      await uploadBytes(imgRef, file);
-      const imageUrl = await getDownloadURL(imgRef);
-
       await addDoc(collection(db, 'books'), {
         title: title.value,
         subject: subject.value,
         grade: Number(grade.value),
         price: Number(price.value),
         contact: contact.value,
-        imageUrl,
+        imageUrl: imageUrl.value,
+        sold: false,
         createdAt: Date.now()
       });
-
       e.target.reset();
     });
   </script>
