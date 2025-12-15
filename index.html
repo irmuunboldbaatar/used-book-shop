@@ -11,6 +11,7 @@
       margin: 0;
       background: #f4f4f4;
     }
+
     header {
       background: #2c3e50;
       color: white;
@@ -19,43 +20,61 @@
       justify-content: space-between;
       align-items: center;
     }
+
     header h1 {
       margin: 0;
       font-size: 1.3rem;
     }
+
     .container {
       padding: 1rem;
     }
+
     .grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 1rem;
     }
+
     .card {
       background: white;
-      padding: 1rem;
+      padding: 0.7rem;
       border-radius: 8px;
       box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     }
+
     .card.sold {
       opacity: 0.5;
     }
+
+    .card img {
+      width: 100%;
+      height: 180px;
+      object-fit: cover;
+      border-radius: 6px;
+      margin-bottom: 0.5rem;
+      background: #ddd;
+    }
+
     .price {
       font-weight: bold;
     }
+
     .sold-label {
       color: red;
       font-weight: bold;
     }
+
     button, a.button {
       background: #3498db;
       color: white;
       border: none;
-      padding: 0.5rem 1rem;
+      padding: 0.4rem 0.8rem;
       border-radius: 5px;
       cursor: pointer;
       text-decoration: none;
     }
+
     .top-buttons button {
       margin-left: 0.5rem;
     }
@@ -84,15 +103,13 @@
   import { getFirestore, collection, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
   import { getAuth, onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
 
-  // 🔥 Firebase config (yours)
   const firebaseConfig = {
     apiKey: "AIzaSyBo975fUWgxYJwGb2Ie4zIcxPb2-etH8ic",
     authDomain: "used-book-shop.firebaseapp.com",
     projectId: "used-book-shop",
     storageBucket: "used-book-shop.firebasestorage.app",
     messagingSenderId: "95397772472",
-    appId: "1:95397772472:web:2e70a9cd2e5e532f2e884d",
-    measurementId: "G-EEZ7CYSM1E"
+    appId: "1:95397772472:web:2e70a9cd2e5e532f2e884d"
   };
 
   const app = initializeApp(firebaseConfig);
@@ -105,7 +122,6 @@
   const loginBtn = document.getElementById("loginBtn");
   const logoutBtn = document.getElementById("logoutBtn");
 
-  // Login / logout
   loginBtn.onclick = () => signInWithPopup(auth, provider);
   logoutBtn.onclick = () => signOut(auth);
 
@@ -114,7 +130,6 @@
     logoutBtn.style.display = user ? "inline" : "none";
   });
 
-  // Load books
   async function loadBooks() {
     const snapshot = await getDocs(collection(db, "books"));
     let total = 0;
@@ -124,23 +139,24 @@
 
     snapshot.forEach(doc => {
       total++;
-      const book = doc.data();
-      if (!book.sold) available++;
+      const b = doc.data();
+      if (!b.sold) available++;
 
       const card = document.createElement("div");
-      card.className = "card" + (book.sold ? " sold" : "");
+      card.className = "card" + (b.sold ? " sold" : "");
 
       card.innerHTML = `
-        <h3>${book.title}</h3>
-        <p class="price">${book.price}₮</p>
-        ${book.sold ? '<p class="sold-label">SOLD</p>' : ''}
+        <img src="${b.imageUrl || ''}" alt="Book image">
+        <h3>${b.title}</h3>
+        <p class="price">${b.price}₮</p>
+        ${b.sold ? '<p class="sold-label">SOLD</p>' : ''}
         <button onclick="location.href='login.html'">Preview</button>
       `;
 
       booksDiv.appendChild(card);
     });
 
-    stats.textContent = `Total books: ${total} · Available: ${available}`;
+    stats.textContent = \`Total books: \${total} · Available: \${available}\`;
   }
 
   loadBooks();
